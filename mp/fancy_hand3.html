@@ -508,6 +508,9 @@
       updateParticles();
 
       if (hands && hands.length > 0) {
+        // Compute inter-hand fingertip touch state
+        let touchState = computeTouchState(hands, gx, gy);
+
         for (let i = 0; i < hands.length; i++) {
           let hand = hands[i];
           let indexTip = hand.keypoints[8];
@@ -519,7 +522,7 @@
 
           checkButtons(tx, ty);
           drawSciFiSkeleton(hand, gx, gy);
-          drawFingertips(hand, gx, gy);
+          drawFingertips(hand, i, gx, gy, touchState);
           drawHoloDial(hand, i, gx, gy);
           drawCursor(tx, ty);
         }
@@ -670,7 +673,7 @@
       text(`HAND_${id}`, cx, cy + 96);
     }
 
-    // === SKELETON ===
+    // === SKELETON / FINGERTIP COLORS ===
     // keypoints 0=wrist, 1-4=thumb, 5-8=index, 9-12=mid, 13-16=ring, 17-20=pinky
     const FINGER_COLORS = [
       [0, 220, 255],   // thumb  — cyan
@@ -679,16 +682,32 @@
       [255, 140, 0],   // ring   — orange
       [255, 50, 160],  // pinky  — hot pink
     ];
-    function fingerGroup(kpIdx) {
-      if (kpIdx >= 1 && kpIdx <= 4) return 0; // thumb
-      if (kpIdx >= 5 && kpIdx <= 8) return 1; // index
-      if (kpIdx >= 9 && kpIdx <= 12) return 2; // middle
-      if (kpIdx >= 13 && kpIdx <= 16) return 3; // ring
-      if (kpIdx >= 17 && kpIdx <= 20) return 4; // pinky
-      return -1; // wrist
+    const TIP_IDS = [4, 8, 12, 16, 20];
+    const TOUCH_THRESH = 40; // px distance to count as "touching"
+    const LINE_COLOR = [120, 210, 255]; // uniform light blue for all bone lines
+
+    // Returns touchState[handIdx][tipLocalIdx] = bool
+    function computeTouchState(hands, gx, gy) {
+      let state = [[false,false,false,false,false],[false,false,false,false,false]];
+      if (hands.length < 2) return state;
+      TIP_IDS.forEach((idA, i) => {
+        TIP_IDS.forEach((idB, j) => {
+          let ax = map(hands[0].keypoints[idA].x, 0, 640, 0, width) + gx;
+          let ay = map(hands[0].keypoints[idA].y, 0, 480, 0, height) + gy;
+          let bx = map(hands[1].keypoints[idB].x, 0, 640, 0, width) + gx;
+          let by = map(hands[1].keypoints[idB].y, 0, 480, 0, height) + gy;
+          if (dist(ax, ay, bx, by) < TOUCH_THRESH) {
+            state[0][i] = true;
+            state[1][j] = true;
+          }
+        });
+      });
+      return state;
     }
+
     function drawSciFiSkeleton(hand, gx, gy) {
       let connections = handPose.getConnections();
+      let [r, g, bl] = LINE_COLOR;
       for (let i = 0; i < connections.length; i++) {
         let a = connections[i][0], b = connections[i][1];
         let x1 = map(hand.keypoints[a].x, 0, 640, 0, width) + gx;
@@ -696,76 +715,78 @@
         let x2 = map(hand.keypoints[b].x, 0, 640, 0, width) + gx;
         let y2 = map(hand.keypoints[b].y, 0, 480, 0, height) + gy;
 
-        // Pick color by finger group; wrist connections use the target keypoint's group
-        let grp = fingerGroup(b);
-        if (grp === -1) grp = fingerGroup(a);
-        let [r, g, bl] = grp === -1 ? [red(mainColor), green(mainColor), blue(mainColor)] : FINGER_COLORS[grp];
-
-        // Hue shift over time for extra life
-        let shift = sin(frameCount * 0.04 + grp) * 30;
-        r = constrain(r + shift, 0, 255);
-
-        // Outer glow pass
-        drawingContext.shadowBlur = 18;
-        drawingContext.shadowColor = `rgba(${r},${g},${bl},1)`;
-        stroke(r, g, bl, 55);
+        // Outer glow
+        drawingContext.shadowBlur = 14;
+        drawingContext.shadowColor = `rgba(${r},${g},${bl},0.8)`;
+        stroke(r, g, bl, 45);
         strokeWeight(6);
         line(x1, y1, x2, y2);
 
-        // Mid glow
-        stroke(r, g, bl, 130);
-        strokeWeight(2.5);
+        // Mid
+        stroke(r, g, bl, 120);
+        strokeWeight(2);
         line(x1, y1, x2, y2);
 
-        // Bright core
-        stroke(r, g, bl, 255);
-        strokeWeight(1);
+        // Core
+        stroke(r, g, bl, 230);
+        strokeWeight(0.8);
         line(x1, y1, x2, y2);
       }
     }
 
     // === FINGERTIPS ===
-    function drawFingertips(hand, gx, gy) {
-      let tipIds = [4, 8, 12, 16, 20];
+    function drawFingertips(hand, handIdx, gx, gy, touchState) {
       let tipNames = ['THB', 'IDX', 'MID', 'RNG', 'PNK'];
-      tipIds.forEach((idx, i) => {
+      TIP_IDS.forEach((idx, i) => {
         let k = hand.keypoints[idx];
         let x = map(k.x, 0, 640, 0, width) + gx;
         let y = map(k.y, 0, 480, 0, height) + gy;
-        let [r, g, bl] = FINGER_COLORS[i];
 
-        // Hue shift
-        let shift = sin(frameCount * 0.04 + i) * 30;
-        r = constrain(r + shift, 0, 255);
+        let touching = touchState[handIdx][i];
 
-        drawingContext.shadowBlur = 28;
-        drawingContext.shadowColor = `rgba(${r},${g},${bl},1)`;
+        let r, g, bl;
+        if (touching) {
+          // White burst when touching
+          r = 255; g = 255; bl = 255;
+        } else {
+          [r, g, bl] = FINGER_COLORS[i];
+          // Subtle hue shift
+          let shift = sin(frameCount * 0.04 + i) * 30;
+          r = constrain(r + shift, 0, 255);
+        }
 
-        // === Outer halo ring (expanding) ===
-        let halo = 28 + 10 * sin(frameCount * 6 + i * 63);
+        drawingContext.shadowBlur = touching ? 50 : 28;
+        drawingContext.shadowColor = touching
+          ? `rgba(255,255,255,1)`
+          : `rgba(${r},${g},${bl},1)`;
+
+        // === Outer halo ring ===
+        let haloBase = touching ? 46 : 28;
+        let halo = haloBase + 10 * sin(frameCount * 6 + i * 63);
         noFill();
-        stroke(r, g, bl, 50);
-        strokeWeight(6);
+        stroke(r, g, bl, touching ? 100 : 50);
+        strokeWeight(touching ? 10 : 6);
         circle(x, y, halo);
 
         // === Mid pulse ring ===
-        stroke(r, g, bl, 160);
-        strokeWeight(1.2);
-        circle(x, y, 20 + 5 * sin(frameCount * 10 + i * 40));
+        stroke(r, g, bl, 180);
+        strokeWeight(touching ? 2 : 1.2);
+        circle(x, y, (touching ? 28 : 20) + 5 * sin(frameCount * 10 + i * 40));
 
         // === Rotating diamond ===
         push();
         translate(x, y);
-        rotate(45 + frameCount * 1.2 + i * 30);
+        let rotSpeed = touching ? 4 : 1.2;
+        rotate(45 + frameCount * rotSpeed + i * 30);
+        let dSize = touching ? 10 : 7;
         noFill();
         stroke(r, g, bl, 255);
-        strokeWeight(1.5);
-        rect(-7, -7, 14, 14);
-        fill(r, g, bl, 80);
-        rect(-7, -7, 14, 14);
-        // inner dot
+        strokeWeight(touching ? 2.5 : 1.5);
+        rect(-dSize, -dSize, dSize * 2, dSize * 2);
+        fill(r, g, bl, touching ? 140 : 80);
+        rect(-dSize, -dSize, dSize * 2, dSize * 2);
         noStroke(); fill(r, g, bl);
-        circle(0, 0, 4);
+        circle(0, 0, touching ? 6 : 4);
         pop();
 
         // === Label ===
