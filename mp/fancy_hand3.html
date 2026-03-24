@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sci-Fi Hand Tracking - Dual Energy v3.0</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/addons/p5.sound.min.js"></script>
+    <script src="https://unpkg.com/ml5@1/dist/ml5.min.js"></script>
+
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+      html, body { margin: 0; padding: 0; background-color: #030408; overflow: hidden; font-family: 'Orbitron', sans-serif; }
+      
+      .nav-group { position: fixed; top: 25px; left: 25px; z-index: 2000; display: flex; gap: 15px; }
+      
+      .nav-btn { 
+        padding: 12px 20px; font-size: 0.8em; border-radius: 6px; font-weight: 700;
+        text-decoration: none; text-transform: uppercase; letter-spacing: 3px;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); cursor: pointer;
+        backdrop-filter: blur(4px);
+      }
+      
+      #back-btn { background: rgba(0, 255, 255, 0.05); border: 1px solid rgba(0, 255, 255, 0.4); color: #0ff; box-shadow: 0 0 10px rgba(0,255,255,0.1); }
+      #reload-btn { background: rgba(255, 50, 50, 0.05); border: 1px solid rgba(255, 50, 50, 0.4); color: #f33; box-shadow: 0 0 10px rgba(255,50,50,0.1); }
+      
+      .nav-btn:hover { transform: translateY(-3px); box-shadow: 0 5px 20px currentColor; background: rgba(255,255,255,0.1); }
+
+      #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, #0a0f19 0%, #000 100%); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; color: #0ff; }
+      .start-btn { background: rgba(0,255,255,0.05); border: 2px solid #0ff; color: #0ff; padding: 15px 40px; font-size: 1.2em; font-weight: 700; cursor: pointer; margin-top: 30px; letter-spacing: 5px; transition: 0.3s; box-shadow: 0 0 15px rgba(0,255,255,0.3); border-radius: 4px; }
+      .start-btn:hover { background: #00ffff; color: #000; box-shadow: 0 0 40px #00ffff; text-shadow: none; }
+      #status-log { position: fixed; bottom: 15px; left: 20px; color: #0ff; font-size: 11px; font-weight: 700; z-index: 2000; text-shadow: 0 0 10px #0ff; letter-spacing: 2px; }
+      
+      /* 掃描線特效 */
+      body::after {
+        content: ""; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+        background-size: 100% 4px, 6px 100%; z-index: 1500; pointer-events: none; opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="nav-group">
+      <a href="../perception_demo.html" id="back-btn" class="nav-btn">HUB</a>
+      <div id="reload-btn" class="nav-btn" onclick="location.reload()">RELOAD SYSTEM</div>
+    </div>
+    
+    <div id="status-log">SYSTEM IDLE</div>
+
+    <div id="overlay">
+      <div style="letter-spacing: 8px; font-size: 1.5em;">CORE_STABILIZER_V3</div>
+      <div id="loading-msg" style="margin-top:10px; font-size: 12px; color: rgba(0,255,255,0.6);">LOADING AI ENGINE...</div>
+      <button id="init-btn" class="start-btn" onclick="initSystem()" style="display:none;">ACTIVATE_LINK</button>
+    </div>
+
+    <script>
+      let video, handPose, hands = [];
+      let isReady = false;
+      let smoothedAngle = [0, 0], lastTickAngle = [0, 0], smoothedPos = [{x:0, y:0}, {x:0, y:0}];
+      let mainColor, colors = ['#00ffff', '#ff0055', '#bbff00'], colorIdx = 0;
+      let glitchTimer = 0, osc, envelope, linkOsc;
+      let modelCheckTimer = 0;
+
+      let buttons = [
+        { label: 'COLOR', x: 40, y: 120, w: 90, h: 40, active: false },
+        { label: 'GLITCH', x: 40, y: 170, w: 90, h: 40, active: false }
+      ];
+
+      function setup() {
+        createCanvas(windowWidth, windowHeight);
+        mainColor = color(colors[colorIdx]);
+        
+        osc = new p5.Oscillator('sine');
+        envelope = new p5.Envelope();
+        envelope.setADSR(0.001, 0.05, 0.1, 0.1);
+        envelope.setRange(0.5, 0);
+
+        linkOsc = new p5.Oscillator('sawtooth');
+        linkOsc.amp(0);
+        
+        handPose = ml5.handPose({ flipped: true, maxHands: 2 }, () => {
+          document.getElementById('loading-msg').style.display = 'none';
+          document.getElementById('init-btn').style.display = 'block';
+          updateLog("MODEL ENGINE READY");
+        });
+        angleMode(DEGREES);
+        textFont('Orbitron');
+      }
+
+      function updateLog(msg) {
+        document.getElementById('status-log').innerText = `LOG: ${msg}`;
+      }
+
+      function initSystem() {
+        userStartAudio();
+        playBootSound();
+        video = createCapture(VIDEO, () => {
+          document.getElementById('overlay').style.display = 'none';
+          startDetection();
+        });
+        video.size(640, 480);
+        video.hide();
+      }
+
+      function startDetection() {
+        isReady = true;
+        updateLog("INITIALIZING DETECTOR...");
+        handPose.detectStart(video, results => {
+          hands = results;
+          modelCheckTimer = 0; // 只要有結果回來就重置計時器
+        });
+      }
+
+      function playTone(freq) { osc.freq(freq); osc.start(); envelope.play(osc); }
+
+      function playBootSound() {
+        let f = 300;
+        let interval = setInterval(() => {
+          playTone(f); f += 250;
+          if (f > 1800) clearInterval(interval);
+        }, 50);
+      }
+
+      function draw() {
+        background(5, 8, 14);
+        drawCoolGrid();
+        if (!isReady) return;
+        
+        drawingContext.shadowBlur = 12;
+        drawingContext.shadowColor = mainColor;
+
+        // 穩定性監控：如果 3 秒內沒有偵測到任何東西（包含偵測空的結果），嘗試重啟偵測
+        modelCheckTimer++;
+        if (modelCheckTimer > 180) { 
+          updateLog("DETECTOR HANG DETECTED. RESTARTING...");
+          startDetection();
+          modelCheckTimer = 0;
+        }
+
+        let gx = (glitchTimer > 0) ? random(-15, 15) : 0;
+        let gy = (glitchTimer > 0) ? random(-5, 5) : 0;
+        if (glitchTimer > 0) glitchTimer--;
+
+        push();
+        translate(width + gx, gy); scale(-1, 1);
+        tint(red(mainColor), green(mainColor), blue(mainColor), 50);
+        image(video, 0, 0, width, height, 0, 0, video.width, video.height, COVER);
+        pop();
+
+        if (hands && hands.length > 0) {
+          for (let i = 0; i < hands.length; i++) {
+            let hand = hands[i];
+            let indexTip = hand.keypoints[8];
+            let tx = map(indexTip.x, 0, 640, 0, width);
+            let ty = map(indexTip.y, 0, 480, 0, height);
+
+            checkButtons(tx, ty);
+            drawSciFiSkeleton(hand, gx, gy);
+            drawFingertips(hand, gx, gy);
+            drawHoloDial(hand, i, gx, gy);
+            drawCursor(tx, ty);
+          }
+
+          if (hands.length === 2) {
+            let d = dist(map(hands[0].keypoints[9].x,0,640,0,width), map(hands[0].keypoints[9].y,0,480,0,height),
+                         map(hands[1].keypoints[9].x,0,640,0,width), map(hands[1].keypoints[9].y,0,480,0,height));
+            let proximity = map(d, 100, 800, 1, 0, true);
+            drawEnergyLink(hands[0], hands[1], proximity, gx, gy);
+            linkOsc.amp(map(proximity, 0, 1, 0.05, 0.5), 0.1);
+            linkOsc.freq(80 + proximity * 100);
+            linkOsc.start();
+          } else { linkOsc.amp(0, 0.5); }
+        } else {
+          linkOsc.amp(0, 0.5);
+          drawScanningUI();
+        }
+        drawVirtualButtons(gx, gy);
+        drawingContext.shadowBlur = 0; // 重置發光避免影響下一幀背景
+      }
+
+      function drawCoolGrid() {
+        push();
+        stroke(0, 255, 255, 12);
+        strokeWeight(1.5);
+        let t = frameCount * 0.5;
+        for(let x = (t % 50); x < width; x += 50) line(x, 0, x, height);
+        for(let y = (t % 50); y < height; y += 50) line(0, y, width, y);
+        pop();
+      }
+
+      function drawEnergyLink(h1, h2, k, gx, gy) {
+        let p1x = map(h1.keypoints[9].x, 0, 640, 0, width) + gx;
+        let p1y = map(h1.keypoints[9].y, 0, 480, 0, height) + gy;
+        let p2x = map(h2.keypoints[9].x, 0, 640, 0, width) + gx;
+        let p2y = map(h2.keypoints[9].y, 0, 480, 0, height) + gy;
+
+        let linkColor = lerpColor(mainColor, color(255, 0, 0), k);
+        strokeWeight(1 + k * 14);
+        stroke(linkColor);
+        beginShape(); noFill();
+        for(let t = 0; t <= 1; t += 0.05) {
+          vertex(lerp(p1x, p2x, t) + random(-k*20, k*20), lerp(p1y, p2y, t) + random(-k*20, k*20));
+        }
+        endShape();
+        fill(255); noStroke(); circle((p1x+p2x)/2, (p1y+p2y)/2, 15 + k*30);
+      }
+
+      function drawHoloDial(hand, id, gx, gy) {
+        let wrist = hand.keypoints[0], middle = hand.keypoints[9];
+        let targetX = map(wrist.x, 0, 640, 0, width), targetY = map(wrist.y, 0, 480, 0, height);
+        let angle = atan2(middle.y - wrist.y, middle.x - wrist.x) + 90;
+        smoothedAngle[id] = lerp(smoothedAngle[id] || 0, angle, 0.15); 
+        smoothedPos[id].x = lerp(smoothedPos[id].x || targetX, targetX, 0.2);
+        smoothedPos[id].y = lerp(smoothedPos[id].y || targetY, targetY, 0.2);
+
+        if (abs(smoothedAngle[id] - lastTickAngle[id]) >= 15) {
+          playTone(1600); lastTickAngle[id] = smoothedAngle[id];
+        }
+        
+        push();
+        translate(smoothedPos[id].x + gx, smoothedPos[id].y + gy);
+        rotate(smoothedAngle[id]);
+        noFill(); stroke(mainColor); strokeWeight(2);
+        arc(0, 0, 130, 130, -40, 220);
+        for(let i = 0; i < 12; i++) { rotate(30); stroke(mainColor, 100); line(50, 0, 58, 0); }
+        fill(255, 50, 80); noStroke(); triangle(75, 0, 65, -5, 65, 5);
+        pop();
+        fill(255); textAlign(CENTER); textSize(24); text(`${int(smoothedAngle[id])}°`, smoothedPos[id].x + gx, smoothedPos[id].y + gy + 10);
+      }
+
+      function checkButtons(x, y) {
+        buttons.forEach(btn => {
+          let isInside = x > btn.x && x < btn.x + btn.w && y > btn.y && y < btn.y + btn.h;
+          if (isInside && !btn.active) {
+            btn.active = true;
+            playTone(1000);
+            if (btn.label === 'COLOR') { colorIdx = (colorIdx + 1) % colors.length; mainColor = color(colors[colorIdx]); }
+            else if (btn.label === 'GLITCH') { glitchTimer = 25; playTone(150); }
+          } else if (!isInside) { btn.active = false; }
+        });
+      }
+
+      function drawSciFiSkeleton(hand, gx, gy) {
+        stroke(red(mainColor), green(mainColor), blue(mainColor), 80);
+        let connections = handPose.getConnections();
+        for (let i = 0; i < connections.length; i++) {
+          let a = connections[i][0], b = connections[i][1];
+          line(map(hand.keypoints[a].x, 0, 640, 0, width) + gx, map(hand.keypoints[a].y, 0, 480, 0, height) + gy,
+               map(hand.keypoints[b].x, 0, 640, 0, width) + gx, map(hand.keypoints[b].y, 0, 480, 0, height) + gy);
+        }
+      }
+
+      function drawFingertips(hand, gx, gy) {
+        [4, 8, 12, 16, 20].forEach(idx => {
+          let k = hand.keypoints[idx];
+          let x = map(k.x, 0, 640, 0, width) + gx, y = map(k.y, 0, 480, 0, height) + gy;
+          noFill(); stroke(255, 180); circle(x, y, 12);
+          fill(255, 150); textSize(9); text(`ID:${idx}`, x+15, y-10);
+        });
+      }
+
+      function drawVirtualButtons(gx, gy) {
+        buttons.forEach(btn => {
+          push(); translate(btn.x + gx/3, btn.y + gy/3);
+          noFill(); stroke(mainColor, 150); rect(0, 0, btn.w, btn.h, 2);
+          if (btn.active) { fill(red(mainColor), green(mainColor), blue(mainColor), 80); rect(0,0,btn.w,btn.h); }
+          fill(btn.active ? 255 : mainColor); textAlign(CENTER, CENTER); textSize(11); text(btn.label, btn.w/2, btn.h/2);
+          pop();
+        });
+      }
+
+      function drawCursor(tx, ty) {
+        fill(255); circle(tx, ty, 6);
+        noFill(); stroke(mainColor); circle(tx, ty, 20 + sin(frameCount*10)*5);
+      }
+
+      function drawScanningUI() {
+        stroke(mainColor, 60); line(0, (frameCount*4)%height, width, (frameCount*4)%height);
+      }
+
+      function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+    </script>
+  </body>
+</html>
