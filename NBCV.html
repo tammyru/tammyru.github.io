@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>海森堡奇聞調查局 - 學生學習網</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom Styles for smooth transitions */
+        .tab-content { display: none; animation: fadeIn 0.5s ease-in-out; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .faq-answer { display: none; overflow: hidden; }
+        .faq-item.active .faq-answer { display: block; animation: slideDown 0.3s ease-out; }
+        .faq-item.active .fa-chevron-down { transform: rotate(180deg); transition: transform 0.3s; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { primary: '#3b82f6', secondary: '#10b981', dark: '#0f172a' }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-dark text-slate-200 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Navigation -->
+    <nav class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('home')">
+                    <i class="fa-solid fa-magnifying-glass-chart text-primary text-2xl"></i>
+                    <span class="font-bold text-xl tracking-wider text-white">奇聞調查局 <span class="text-sm font-normal text-slate-400 bg-slate-800 px-2 py-1 rounded-full ml-2">學生版</span></span>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <button onclick="switchTab('library')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-slate-800 hover:text-white transition-colors" data-target="library"><i class="fa-solid fa-book-open mr-2"></i>案件資源庫</button>
+                        <button onclick="switchTab('game')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-slate-800 hover:text-white transition-colors" data-target="game"><i class="fa-solid fa-gamepad mr-2"></i>邏輯偵探遊戲</button>
+                        <button onclick="switchTab('faq')" class="nav-btn px-3 py-2 rounded-md text-sm font-medium hover:bg-slate-800 hover:text-white transition-colors" data-target="faq"><i class="fa-solid fa-circle-question mr-2"></i>常見問題</button>
+                    </div>
+                </div>
+                <!-- Mobile menu button -->
+                <div class="md:hidden flex items-center">
+                    <button id="mobile-menu-btn" class="text-slate-400 hover:text-white focus:outline-none">
+                        <i class="fa-solid fa-bars text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden bg-slate-800 pb-3 pt-2">
+            <button onclick="switchTab('library'); toggleMobileMenu()" class="block w-full text-left px-4 py-2 text-base font-medium text-slate-300 hover:text-white hover:bg-slate-700">案件資源庫</button>
+            <button onclick="switchTab('game'); toggleMobileMenu()" class="block w-full text-left px-4 py-2 text-base font-medium text-slate-300 hover:text-white hover:bg-slate-700">邏輯偵探遊戲</button>
+            <button onclick="switchTab('faq'); toggleMobileMenu()" class="block w-full text-left px-4 py-2 text-base font-medium text-slate-300 hover:text-white hover:bg-slate-700">常見問題</button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- Home / Welcome Section (Combined with Library for simplicity in SPA) -->
+        <section id="library" class="tab-content active">
+            <div class="text-center mb-12 mt-8">
+                <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-4">探索真相，破解網路謠言</h1>
+                <p class="text-lg text-slate-400 max-w-2xl mx-auto">專為學生設計的媒體識讀資料庫。透過分析真實發生的網路奇聞、爭議事件與騙局，培養你的批判性思考與科學精神。</p>
+            </div>
+
+            <!-- Search Box -->
+            <div class="max-w-3xl mx-auto mb-10">
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fa-solid fa-search text-slate-500"></i>
+                    </div>
+                    <input type="text" id="searchInput" class="block w-full pl-10 pr-3 py-4 border border-slate-700 rounded-xl leading-5 bg-slate-800 text-slate-300 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all sm:text-lg" placeholder="搜尋案件名稱、關鍵字（例如：假救援、超雄綜合症、打假...）">
+                </div>
+                <!-- Categories -->
+                <div class="flex flex-wrap gap-2 mt-4 justify-center" id="category-filters">
+                    <button class="filter-btn active bg-primary text-white px-4 py-1.5 rounded-full text-sm font-medium transition-colors" data-filter="all">全部案件</button>
+                    <button class="filter-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-1.5 rounded-full text-sm font-medium transition-colors" data-filter="媒體識讀">媒體識讀</button>
+                    <button class="filter-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-1.5 rounded-full text-sm font-medium transition-colors" data-filter="科學闢謠">科學闢謠</button>
+                    <button class="filter-btn bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-1.5 rounded-full text-sm font-medium transition-colors" data-filter="社會邏輯">社會邏輯</button>
+                </div>
+            </div>
+
+            <!-- Resource Grid -->
+            <div id="resourceGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Cards will be injected by JS -->
+            </div>
+            
+            <!-- No Results State -->
+            <div id="noResults" class="hidden text-center py-12">
+                <i class="fa-regular fa-folder-open text-6xl text-slate-600 mb-4"></i>
+                <h3 class="text-xl font-medium text-slate-300">找不到相關案件</h3>
+                <p class="text-slate-500 mt-2">請嘗試使用其他關鍵字搜尋。</p>
+            </div>
+        </section>
+
+        <!-- Interactive Game Section -->
+        <section id="game" class="tab-content">
+            <div class="max-w-4xl mx-auto">
+                <div class="text-center mb-10">
+                    <h2 class="text-3xl font-bold text-white mb-4">邏輯偵探大挑戰</h2>
+                    <p class="text-slate-400">測試你對假訊息的辨識能力！根據海森堡檔案館的資料，找出事件的真相。</p>
+                </div>
+
+                <div class="glass-panel rounded-2xl p-6 md:p-10 shadow-2xl relative overflow-hidden">
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-slate-800 rounded-full h-2.5 mb-8">
+                        <div id="game-progress" class="bg-secondary h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+
+                    <!-- Start Screen -->
+                    <div id="quiz-start" class="text-center py-8">
+                        <i class="fa-solid fa-user-secret text-6xl text-primary mb-6"></i>
+                        <h3 class="text-2xl font-bold text-white mb-4">準備好接受挑戰了嗎？</h3>
+                        <p class="text-slate-300 mb-8">共 5 題情境測驗，考驗你的獨立思考與科學素養。</p>
+                        <button onclick="startQuiz()" class="bg-primary hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-full text-lg transition-transform transform hover:scale-105 shadow-lg shadow-blue-500/30">
+                            開始調查 <i class="fa-solid fa-arrow-right ml-2"></i>
+                        </button>
+                    </div>
+
+                    <!-- Question Screen -->
+                    <div id="quiz-question" class="hidden">
+                        <div class="flex justify-between items-center mb-6">
+                            <span id="question-counter" class="text-sm font-semibold text-primary uppercase tracking-wider">問題 1 / 5</span>
+                            <span id="score-display" class="text-sm font-medium text-slate-400">分數: 0</span>
+                        </div>
+                        <h3 id="question-text" class="text-xl md:text-2xl font-medium text-white mb-8 leading-relaxed"></h3>
+                        <div id="options-container" class="space-y-4">
+                            <!-- Options injected via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Feedback Screen -->
+                    <div id="quiz-feedback" class="hidden text-center py-8">
+                        <div id="feedback-icon" class="text-6xl mb-4"></div>
+                        <h3 id="feedback-title" class="text-2xl font-bold mb-4"></h3>
+                        <p id="feedback-explanation" class="text-slate-300 mb-8 text-lg bg-slate-800/50 p-6 rounded-xl border border-slate-700"></p>
+                        <button onclick="nextQuestion()" class="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-8 rounded-full transition-colors">
+                            下一題 <i class="fa-solid fa-forward-step ml-2"></i>
+                        </button>
+                    </div>
+
+                    <!-- Result Screen -->
+                    <div id="quiz-result" class="hidden text-center py-8">
+                        <i class="fa-solid fa-trophy text-6xl text-yellow-500 mb-6"></i>
+                        <h3 class="text-3xl font-bold text-white mb-2">調查結束！</h3>
+                        <p class="text-lg text-slate-400 mb-6">你的最終得分是：<span id="final-score" class="text-2xl font-bold text-white ml-2"></span> / 5</p>
+                        <p id="result-message" class="text-xl text-primary font-medium mb-8"></p>
+                        <button onclick="resetQuiz()" class="bg-primary hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-full transition-transform transform hover:scale-105">
+                            重新挑戰 <i class="fa-solid fa-rotate-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ Section -->
+        <section id="faq" class="tab-content">
+            <div class="max-w-3xl mx-auto">
+                <div class="text-center mb-10">
+                    <h2 class="text-3xl font-bold text-white mb-4">常見問題 (FAQ)</h2>
+                    <p class="text-slate-400">關於本網站的使用方式與學習指南</p>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- FAQ Item 1 -->
+                    <div class="faq-item bg-slate-800 border border-slate-700 rounded-xl overflow-hidden cursor-pointer hover:border-slate-600 transition-colors">
+                        <div class="faq-question flex justify-between items-center p-5">
+                            <h4 class="text-lg font-medium text-white">這個網站是做什麼用的？</h4>
+                            <i class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                        </div>
+                        <div class="faq-answer px-5 pb-5 text-slate-300">
+                            <p>本網站收集了各種網路奇聞、都市傳說以及爭議事件，專為學生設計作為「媒體識讀」與「邏輯思考」的教材。我們希望透過拆解這些案件，教導學生如何在資訊爆炸的時代保持懷疑精神，學會查證事實，拒絕盲從。</p>
+                        </div>
+                    </div>
+
+                    <!-- FAQ Item 2 -->
+                    <div class="faq-item bg-slate-800 border border-slate-700 rounded-xl overflow-hidden cursor-pointer hover:border-slate-600 transition-colors">
+                        <div class="faq-question flex justify-between items-center p-5">
+                            <h4 class="text-lg font-medium text-white">案件裡的故事都是真的嗎？</h4>
+                            <i class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                        </div>
+                        <div class="faq-answer px-5 pb-5 text-slate-300">
+                            <p>資源庫中的事件皆曾真實發生在網路上，但<strong>事件內含的資訊有真有假</strong>！例如「幽靈相片」是被證實的造假P圖；「超雄綜合症」被證實是遭到誤解的醫學名詞。本網站的目的就是帶領你一步步揭開這些騙局與迷思的真相。</p>
+                        </div>
+                    </div>
+
+                    <!-- FAQ Item 3 -->
+                    <div class="faq-item bg-slate-800 border border-slate-700 rounded-xl overflow-hidden cursor-pointer hover:border-slate-600 transition-colors">
+                        <div class="faq-question flex justify-between items-center p-5">
+                            <h4 class="text-lg font-medium text-white">如何使用「互動式遊戲」？</h4>
+                            <i class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                        </div>
+                        <div class="faq-answer px-5 pb-5 text-slate-300">
+                            <p>建議你先在「案件資源庫」閱讀過各種事件後，再進入「邏輯偵探遊戲」挑戰。遊戲會模擬這些案件中的盲點，測驗你是否能用科學的思維找出破綻。這能幫助你加深對邏輯謬誤的理解。</p>
+                        </div>
+                    </div>
+
+                    <!-- FAQ Item 4 -->
+                    <div class="faq-item bg-slate-800 border border-slate-700 rounded-xl overflow-hidden cursor-pointer hover:border-slate-600 transition-colors">
+                        <div class="faq-question flex justify-between items-center p-5">
+                            <h4 class="text-lg font-medium text-white">什麼是「媒體識讀」？</h4>
+                            <i class="fa-solid fa-chevron-down text-slate-400 transition-transform"></i>
+                        </div>
+                        <div class="faq-answer px-5 pb-5 text-slate-300">
+                            <p>媒體識讀（Media Literacy）是指人們面對各種媒體訊息時，能夠運用批判性思考去解讀、分析並評估資訊真偽的能力。例如在「印度假救援」事件中，不被網紅的悲慘劇本煽動情緒，就是媒體識讀的一種展現。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-slate-900 border-t border-slate-800 py-8 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 text-center text-slate-500 text-sm">
+            <p>&copy; 2026 海森堡奇聞調查局 學生版. 提倡科學精神與批判性思考.</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- 1. Data Source (From NotebookLM Documents) ---
+        const resources = [
+            {
+                id: 1,
+                title: "世界最高智商女人的「三門問題」",
+                category: "科學闢謠",
+                icon: "fa-brain",
+                color: "text-blue-400",
+                desc: "瑪麗蓮解答了著名的機率謎題，卻遭到全美無數學者與博士的網路霸凌。最後證明，真理往往掌握在少數人手中，不要盲從權威。",
+                tags: ["數學邏輯", "權威迷思"]
+            },
+            {
+                id: 2,
+                title: "庫珀家族的幽靈相片",
+                category: "媒體識讀",
+                icon: "fa-ghost",
+                color: "text-purple-400",
+                desc: "網路上瘋傳的「全家福掉出無頭屍體」照片是真的嗎？論壇大神利用技術手段，一步步拆解這張被神化的假照片。",
+                tags: ["都市傳說", "造假查證"]
+            },
+            {
+                id: 3,
+                title: "「超雄綜合症」就是天生殺人狂？",
+                category: "科學闢謠",
+                icon: "fa-dna",
+                color: "text-green-400",
+                desc: "多一條Y染色體就會犯罪？不良營銷號利用恐懼製造焦慮。帶你用醫學研究闢謠，了解基因與行為的真實關聯。",
+                tags: ["生物遺傳", "謠言終結"]
+            },
+            {
+                id: 4,
+                title: "網紅印度「假救援」騙局",
+                category: "媒體識讀",
+                icon: "fa-video",
+                color: "text-red-400",
+                desc: "救回被嫁到印度的中國女人？離奇悲慘的事件背後，原來全都是為了引流帶貨（321上鏈接）精心策劃的劇本。",
+                tags: ["網紅生態", "情緒勒索"]
+            },
+            {
+                id: 5,
+                title: "「磁爆步兵」楊永信的網癮治療",
+                category: "社會邏輯",
+                icon: "fa-bolt",
+                color: "text-yellow-400",
+                desc: "在官方加持下，利用非人道的電擊手段「治療」網癮少年。探討家長焦慮如何催生出荒謬且暴力的畸形產業。",
+                tags: ["心理健康", "教育反思"]
+            },
+            {
+                id: 6,
+                title: "魔法少女山田：偽紀錄片的層層套路",
+                category: "媒體識讀",
+                icon: "fa-wand-magic-sparkles",
+                color: "text-pink-400",
+                desc: "一首「唱即死之歌」引發的都市傳說。分析導演如何利用偽紀錄片的手法，層層嵌套蒙蔽觀眾的眼睛。",
+                tags: ["影視分析", "虛構文學"]
+            },
+            {
+                id: 7,
+                title: "網紅造假：買活蟹變死蟹",
+                category: "社會邏輯",
+                icon: "fa-robot",
+                color: "text-cyan-400",
+                desc: "買家利用 AI 生成假照片，把活螃蟹P成死螃蟹去敲詐商家。探討 AI 技術發展在電商平台衍生出的新型詐騙手段。",
+                tags: ["AI倫理", "消費詐騙"]
+            },
+            {
+                id: 8,
+                title: "鐵頭懲惡揚善的覆滅",
+                category: "社會邏輯",
+                icon: "fa-gavel",
+                color: "text-orange-400",
+                desc: "從打假黑心商販的英雄，到因為流量迷失自我，甚至前往靖國神社尿尿惹出跨國爭議，最終因敲詐勒索入獄的網紅啟示錄。",
+                tags: ["網路狂熱", "法治教育"]
+            }
+        ];
+
+        // --- 2. Tab Navigation & UI Logic ---
+        function switchTab(tabId) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            // Show target tab
+            document.getElementById(tabId).classList.add('active');
+            
+            // Update active state in nav
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                if(btn.dataset.target === tabId) {
+                    btn.classList.add('bg-slate-800', 'text-white');
+                    btn.classList.remove('text-slate-300');
+                } else {
+                    btn.classList.remove('bg-slate-800', 'text-white');
+                    btn.classList.add('text-slate-300');
+                }
+            });
+        }
+
+        // Mobile menu toggle
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+        document.getElementById('mobile-menu-btn').addEventListener('click', toggleMobileMenu);
+
+        // FAQ Toggle Logic
+        document.querySelectorAll('.faq-question').forEach(item => {
+            item.addEventListener('click', () => {
+                const parent = item.parentElement;
+                // Close others
+                document.querySelectorAll('.faq-item').forEach(faq => {
+                    if (faq !== parent) faq.classList.remove('active');
+                });
+                // Toggle current
+                parent.classList.toggle('active');
+            });
+        });
+
+        // --- 3. Resource Library Rendering & Filtering ---
+        const resourceGrid = document.getElementById('resourceGrid');
+        const searchInput = document.getElementById('searchInput');
+        const noResults = document.getElementById('noResults');
+        const filterBtns = document.querySelectorAll('.filter-btn');
+
+        let currentFilter = 'all';
+        let searchQuery = '';
+
+        function renderResources() {
+            resourceGrid.innerHTML = '';
+            
+            const filtered = resources.filter(res => {
+                const matchesCategory = currentFilter === 'all' || res.category === currentFilter;
+                const matchesSearch = res.title.includes(searchQuery) || res.desc.includes(searchQuery) || res.tags.some(tag => tag.includes(searchQuery));
+                return matchesCategory && matchesSearch;
+            });
+
+            if (filtered.length === 0) {
+                noResults.classList.remove('hidden');
+            } else {
+                noResults.classList.add('hidden');
+                filtered.forEach(res => {
+                    const card = document.createElement('div');
+                    card.className = 'glass-panel rounded-xl overflow-hidden hover:-translate-y-1 transition-transform duration-300 flex flex-col h-full group';
+                    
+                    const tagsHtml = res.tags.map(tag => `<span class="bg-slate-700/50 text-slate-300 text-xs px-2 py-1 rounded-md border border-slate-600">${tag}</span>`).join('');
+
+                    card.innerHTML = `
+                        <div class="p-6 flex-grow">
+                            <div class="flex items-center gap-3 mb-4">
+                                <div class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700 group-hover:border-slate-500 transition-colors">
+                                    <i class="fa-solid ${res.icon} ${res.color} text-lg"></i>
+                                </div>
+                                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 bg-slate-800 px-2 py-1 rounded border border-slate-700">${res.category}</span>
+                            </div>
+                            <h3 class="text-xl font-bold text-white mb-2 line-clamp-2">${res.title}</h3>
+                            <p class="text-slate-400 text-sm mb-4 line-clamp-3">${res.desc}</p>
+                            <div class="flex flex-wrap gap-2 mt-auto">
+                                ${tagsHtml}
+                            </div>
+                        </div>
+                        <div class="px-6 py-3 bg-slate-800/50 border-t border-slate-700/50 mt-auto flex justify-between items-center cursor-pointer hover:bg-slate-700/50 transition-colors" onclick="alert('學生您好！此處為預覽功能，實際網站將導向至完整案件分析頁面。')">
+                            <span class="text-sm text-primary font-medium">閱讀案件分析</span>
+                            <i class="fa-solid fa-arrow-right text-primary text-sm transform group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    `;
+                    resourceGrid.appendChild(card);
+                });
+            }
+        }
+
+        // Search event
+        searchInput.addEventListener('input', (e) => {
+            searchQuery = e.target.value.trim();
+            renderResources();
+        });
+
+        // Category filter events
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Update active button styling
+                filterBtns.forEach(b => {
+                    b.classList.remove('bg-primary', 'text-white');
+                    b.classList.add('bg-slate-800', 'text-slate-300');
+                });
+                btn.classList.add('bg-primary', 'text-white');
+                btn.classList.remove('bg-slate-800', 'text-slate-300');
+                
+                currentFilter = btn.dataset.filter;
+                renderResources();
+            });
+        });
+
+        // Initial render
+        renderResources();
+        // Set initial active tab styling
+        switchTab('library');
+
+
+        // --- 4. Interactive Quiz Game Logic ---
+        const quizData = [
+            {
+                question: "在「三門問題」（蒙提霍爾問題）中，當主持人打開一扇沒有獎品的門後，參賽者如果選擇「換門」，中獎機率會如何變化？",
+                options: [
+                    "機率不變，一樣是 1/2",
+                    "機率會提高到 2/3",
+                    "機率會降低，因為一開始選中的機率較大",
+                    "全憑運氣，機率無法計算"
+                ],
+                correct: 1,
+                explanation: "正確！瑪麗蓮當年提出換門會讓機率提高到 2/3，遭到大量學者網暴，但透過數學與電腦模擬證實，她的邏輯是完全正確的。這告訴我們面對權威不要盲從，要相信科學邏輯。"
+            },
+            {
+                id: 3,
+                question: "網路傳言「超雄綜合症」(XYY染色體) 的人天生就有嚴重的暴力犯罪傾向，這是真的嗎？",
+                options: [
+                    "真的，他們被稱為天生犯罪者",
+                    "假的，醫學研究證實XYY與暴力犯罪無直接關聯",
+                    "一半一半，取決於血型",
+                    "只有男性會有，且一定會傷人"
+                ],
+                correct: 1,
+                explanation: "正確！早在1999年的長期追蹤報告就已經闢謠，XYY染色體患者除了可能身高較高、生長較快外，與普通人無異。網路上將其與犯罪畫上等號，是無良營銷號製造焦慮的假科普。"
+            },
+            {
+                question: "近期發生網紅在印度拍攝「拯救被拐賣的中國女子」事件，最後警方調查的結果是什麼？",
+                options: [
+                    "成功拯救該名女子並募款",
+                    "女子其實是自願留在印度",
+                    "整起事件是為了騙取關注和帶貨而精心設計的造假劇本",
+                    "是AI合成的虛擬影片"
+                ],
+                correct: 2,
+                explanation: "正確！網紅為了流量與帶貨利益，僱用演員編造劇本，利用大眾的同情心進行情緒勒索。這是在社群媒體時代必須具備的「媒體識讀」能力，不要輕易被悲慘故事帶偏節奏。"
+            },
+            {
+                question: "庫珀家族的「幽靈相片」在網路上流傳甚廣，論壇 metabunk 的大神最後如何揭開真相？",
+                options: [
+                    "請靈媒去現場作法",
+                    "發現了原版未經合成（P圖）的彩色照片",
+                    "證明照片中的房子根本不存在",
+                    "發現是一部恐怖電影的宣傳海報"
+                ],
+                correct: 1,
+                explanation: "正確！論壇參與者找到了照片中男孩的原版彩色照片，證實網路上流傳的黑白幽靈照是透過後製技術加上鬼影的造假產物。這顯示了「交叉比對」與「尋找原始出處」在闢謠中的重要性。"
+            },
+            {
+                question: "在網路買賣中，有買家將收到的「活蟹」變成「死蟹」來要求退款，他是怎麼做到的？",
+                options: [
+                    "故意用熱水燙死螃蟹",
+                    "用寄居蟹掉包",
+                    "利用 AI 生成技術，將活蟹照片修改成死蟹的樣子",
+                    "用塑膠玩具蟹拍照"
+                ],
+                correct: 2,
+                explanation: "正確！商家發現了退款照片中的諸多破綻，證實是買家濫用 AI 圖像生成技術來進行詐騙。科技的進步也帶來了新型態的造假手段，我們在網路閱聽時必須具備更高的辨識能力。"
+            }
+        ];
+
+        let currentQuestion = 0;
+        let score = 0;
+
+        const elStart = document.getElementById('quiz-start');
+        const elQuestion = document.getElementById('quiz-question');
+        const elFeedback = document.getElementById('quiz-feedback');
+        const elResult = document.getElementById('quiz-result');
+        const elProgress = document.getElementById('game-progress');
+
+        function startQuiz() {
+            currentQuestion = 0;
+            score = 0;
+            elStart.classList.add('hidden');
+            elResult.classList.add('hidden');
+            elQuestion.classList.remove('hidden');
+            renderQuestion();
+        }
+
+        function renderQuestion() {
+            const q = quizData[currentQuestion];
+            document.getElementById('question-counter').innerText = `問題 ${currentQuestion + 1} / ${quizData.length}`;
+            document.getElementById('score-display').innerText = `分數: ${score}`;
+            document.getElementById('question-text').innerText = q.question;
+            
+            // Update progress bar
+            const progressPercent = (currentQuestion / quizData.length) * 100;
+            elProgress.style.width = `${progressPercent}%`;
+
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = '';
+            
+            q.options.forEach((opt, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left p-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition-all font-medium text-slate-200 group flex items-center';
+                btn.innerHTML = `<span class="w-8 h-8 rounded-full bg-slate-700 group-hover:bg-primary text-slate-300 group-hover:text-white flex items-center justify-center mr-4 transition-colors font-bold">${String.fromCharCode(65 + index)}</span> <span>${opt}</span>`;
+                btn.onclick = () => checkAnswer(index);
+                optionsContainer.appendChild(btn);
+            });
+        }
+
+        function checkAnswer(selectedIndex) {
+            const q = quizData[currentQuestion];
+            const isCorrect = selectedIndex === q.correct;
+            
+            elQuestion.classList.add('hidden');
+            elFeedback.classList.remove('hidden');
+            
+            const title = document.getElementById('feedback-title');
+            const icon = document.getElementById('feedback-icon');
+            
+            if (isCorrect) {
+                score++;
+                title.innerText = "判斷正確！";
+                title.className = "text-2xl font-bold mb-4 text-secondary";
+                icon.innerHTML = '<i class="fa-regular fa-circle-check text-secondary"></i>';
+            } else {
+                title.innerText = "判斷錯誤！";
+                title.className = "text-2xl font-bold mb-4 text-red-500";
+                icon.innerHTML = '<i class="fa-regular fa-circle-xmark text-red-500"></i>';
+            }
+            
+            document.getElementById('feedback-explanation').innerText = q.explanation;
+        }
+
+        function nextQuestion() {
+            currentQuestion++;
+            elFeedback.classList.add('hidden');
+            
+            if (currentQuestion < quizData.length) {
+                elQuestion.classList.remove('hidden');
+                renderQuestion();
+            } else {
+                showResult();
+            }
+        }
+
+        function showResult() {
+            elProgress.style.width = '100%';
+            elResult.classList.remove('hidden');
+            document.getElementById('final-score').innerText = score;
+            
+            const msg = document.getElementById('result-message');
+            if (score === quizData.length) {
+                msg.innerText = "太厲害了！你具備頂尖的邏輯思考與媒體識讀能力，謠言休想騙過你！";
+            } else if (score >= 3) {
+                msg.innerText = "表現不錯！你已經具備了基本的查證意識，繼續保持懷疑精神喔！";
+            } else {
+                msg.innerText = "網路上陷阱很多！建議多逛逛「案件資源庫」，提升你的媒體識讀能力！";
+            }
+        }
+
+        function resetQuiz() {
+            startQuiz();
+        }
+    </script>
+</body>
+</html>
